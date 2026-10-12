@@ -1,15 +1,18 @@
 # Waveshare RP2040-Zero Mouse Jiggler
 
 Turns the board into a USB HID mouse jiggler, with the onboard NeoPixel
-showing status. Two implementations live side by side:
+showing status. Two implementations live side by side, each with matching
+tooling under `tools/`:
 
-- **`firmware-circuitpython/`** — CircuitPython. No on/off button: this
-  board's CircuitPython port does not expose the BOOTSEL pin in software
-  (confirmed via `microcontroller.pin`, see `TROUBLESHOOTING.md`), so it
-  runs continuously from power-on. Quick to iterate on.
-- **`firmware-c/`** — C/C++ with the Pico SDK + TinyUSB. Reads BOOTSEL
-  directly via register-level access (bypasses the limitation above), used
-  as an on/off toggle. More setup, but gives full hardware control.
+- **`firmware-circuitpython/`** (tooling: `tools/circuitpython/`) —
+  CircuitPython. No on/off button: this board's CircuitPython port does not
+  expose the BOOTSEL pin in software (confirmed via `microcontroller.pin`,
+  see `TROUBLESHOOTING.md`), so it runs continuously from power-on. Quick to
+  iterate on.
+- **`firmware-c/`** (tooling: `tools/c/`) — C/C++ with the Pico SDK +
+  TinyUSB. Reads BOOTSEL directly via register-level access (bypasses the
+  limitation above), used as an on/off toggle. More setup, but gives full
+  hardware control.
 
 ## Behavior (both variants)
 
@@ -36,7 +39,7 @@ real Raspberry Pi VID/PID is left as-is).
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r tools/requirements.txt
+pip install -r tools/circuitpython/requirements.txt
 ```
 
 ### Flashing CircuitPython (first time only)
@@ -46,7 +49,7 @@ pip install -r tools/requirements.txt
 2. Run:
 
    ```bash
-   ./tools/flash_circuitpython.sh
+   ./tools/circuitpython/flash.sh
    ```
 
    The board will reboot and re-mount as `CIRCUITPY`.
@@ -56,17 +59,46 @@ pip install -r tools/requirements.txt
 With the board mounted as `CIRCUITPY`:
 
 ```bash
-./tools/deploy_circuitpython.sh
+./tools/circuitpython/deploy.sh
 ```
 
 This installs the required libraries (`adafruit_hid`, `neopixel`) via
 `circup` and copies `firmware-circuitpython/code.py` and `boot.py` onto the
 board, which CircuitPython runs automatically.
 
-Both `tools/flash_circuitpython.sh` and `tools/deploy_circuitpython.sh`
+Both `tools/circuitpython/flash.sh` and `tools/circuitpython/deploy.sh`
 auto-detect the mounted drive under `/media/*` or `/run/media/*`; pass the
 mount path explicitly as an argument if autodetection fails.
 
 ## `firmware-c/`
 
-See `firmware-c/README.md` for build/flash instructions.
+Has its own on/off toggle on BOOTSEL (no RESET toggle — RESET is wired to
+the chip's RUN/reset pin, so pressing it just restarts the program).
+
+### Setup
+
+Requires `cmake`, an `arm-none-eabi-gcc` toolchain, and a `pico-sdk`
+checkout (with its submodules initialized). Point `PICO_SDK_PATH` at it.
+
+### Building
+
+```bash
+export PICO_SDK_PATH=/path/to/pico-sdk
+./tools/c/build.sh
+```
+
+Produces `firmware-c/build/mouse_jiggler.uf2`.
+
+### Flashing
+
+1. Put the board in bootloader mode: hold **BOOT**, tap/replug **RESET**,
+   then release. It should mount as a drive named `RPI-RP2`.
+2. Run:
+
+   ```bash
+   ./tools/c/flash.sh
+   ```
+
+Both `tools/c/build.sh` and `tools/c/flash.sh` auto-detect paths relative to
+the repo root; `flash.sh` also auto-detects the mounted `RPI-RP2` drive
+under `/media/*` or `/run/media/*`, or takes it as an explicit argument.
