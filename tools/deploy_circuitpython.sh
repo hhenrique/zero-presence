@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy firmware/code.py, firmware/boot.py, and CircuitPython library deps to a mounted CIRCUITPY drive.
+# Deploy firmware-circuitpython/code.py, boot.py, and CircuitPython library deps to a mounted CIRCUITPY drive.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,8 +20,8 @@ echo "Deploying to: $CIRCUITPY"
 source "$REPO_ROOT/.venv/bin/activate"
 circup --path "$CIRCUITPY" install adafruit_hid neopixel
 
-cp "$REPO_ROOT/firmware/code.py" "$CIRCUITPY/code.py"
-cp "$REPO_ROOT/firmware/boot.py" "$CIRCUITPY/boot.py"
+cp "$REPO_ROOT/firmware-circuitpython/code.py" "$CIRCUITPY/code.py"
+cp "$REPO_ROOT/firmware-circuitpython/boot.py" "$CIRCUITPY/boot.py"
 sync
 
 echo "Done."

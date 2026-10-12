@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 tools/cpy.uf2
 *.uf2
+firmware-c/build/
+firmware-c/pico-sdk/
