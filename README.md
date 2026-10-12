@@ -1,5 +1,6 @@
 # Waveshare RP2040-Zero Mouse Jiggler
 
+Firmware for the [Waveshare RP2040-Zero](https://www.waveshare.com/rp2040-zero.htm).
 Turns the board into a USB HID mouse jiggler, with the onboard NeoPixel
 showing status. Two implementations live side by side, each with matching
 tooling under `tools/`:
