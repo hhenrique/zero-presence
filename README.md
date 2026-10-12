@@ -14,18 +14,25 @@ tooling under `tools/`:
   limitation above), used as an on/off toggle. More setup, but gives full
   hardware control.
 
-## Behavior (both variants)
+## Behavior
 
-Cycles forever through:
-1. 5s moving (LED **red**)
-2. 5s idle (LED **green**)
-3. 10s moving (LED **red**)
-4. 10s idle (LED **green**)
+Both variants enumerate as a standard USB HID mouse — no special drivers
+needed on the host — and use the same movement cycle: 5s moving / 5s idle /
+10s moving / 10s idle, repeating. USB manufacturer/product strings are set
+to `"Generic"` / `"USB Mouse"` rather than the board name, so it isn't
+singled out by name (the real Raspberry Pi VID/PID is left as-is).
 
-Enumerates as a standard USB HID mouse — no special drivers needed on the
-host. USB manufacturer/product strings are set to `"Generic"` / `"USB
-Mouse"` rather than the board name, so it isn't singled out by name (the
-real Raspberry Pi VID/PID is left as-is).
+The two variants differ in on/off control and LED behavior, because the
+CircuitPython port on this board can't read the BOOTSEL button (see
+`TROUBLESHOOTING.md`):
+
+- **`firmware-circuitpython/`**: always on from power-on, no button. LED
+  cycles **red** while moving, **green** while idle, for as long as it's
+  plugged in.
+- **`firmware-c/`**: off by default. BOOTSEL toggles on/off. On power-on
+  (off → on transition), the LED blinks **green twice** at 0.2 brightness;
+  otherwise the LED stays off the whole time, including during the
+  move/idle cycle.
 
 ## `firmware-circuitpython/`
 

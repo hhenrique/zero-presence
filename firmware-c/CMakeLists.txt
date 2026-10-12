@@ -12,6 +12,7 @@ pico_sdk_init()
 add_executable(mouse_jiggler
     src/main.c
     src/usb_descriptors.c
+    src/bootsel_button.c
 )
 
 pico_generate_pio_header(mouse_jiggler ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)

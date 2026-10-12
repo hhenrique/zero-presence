@@ -1,5 +1,95 @@
 # Troubleshooting Log
 
+## 2026-10-11 — C firmware: board doesn't enumerate over USB at all
+
+### Observed behavior
+
+After building and flashing `firmware-c/` for the first time, the board
+disappeared from USB entirely — not even a generic/unnamed device showed up:
+
+```bash
+lsusb -d 2e8a: -v
+lsusb
+```
+
+Neither command showed the board (no `2e8a:` entry anywhere in `lsusb`).
+
+### Root cause
+
+`bootsel_button_pressed()` (in `firmware-c/src/bootsel_button.h` at the
+time) was declared `static inline` while also being pinned to a RAM
+section via `__attribute__((section(".time_critical...")))`. The `inline`
+keyword lets the compiler duplicate the function body into a
+flash-resident caller instead of only keeping the RAM copy. Since the
+function's whole purpose is to run from RAM while flash/XIP is briefly
+disabled (BOOTSEL shares a pin with QSPI_SS, the flash chip-select line),
+an inlined copy executing from flash during that window hangs/crashes the
+MCU before USB ever gets a chance to enumerate.
+
+### Fix applied
+
+Moved the function to its own `bootsel_button.c`/`.h` pair and used the
+Pico SDK's own `__no_inline_not_in_flash_func` macro, which both places the
+function in RAM and forbids inlining — matching the SDK's own convention
+for this exact pattern. Rebuilt and reflashed; `lsusb` then showed the
+device enumerating correctly.
+
+## 2026-10-11 — C firmware: LED stuck on one color (always red)
+
+### Observed behavior
+
+After the fix above, USB enumeration, the BOOTSEL on/off toggle, and the
+mouse-jiggle timing all worked — but the status LED never changed color,
+staying red through both the "moving" and "idle" phases.
+
+### Root cause
+
+In `firmware-c/src/main.c`, the PIO program load was written as:
+
+```c
+uint offset = pio_claim_free_sm_and_add_program(&ws2812_program, &pio, &pio_sm, NULL);
+```
+
+`pio_claim_free_sm_and_add_program()` returns a `bool` (success/failure)
+and writes the *actual* instruction-memory offset through its 4th
+parameter — which was passed as `NULL` here, discarding it. The boolean
+return value (`1` on success) was then used as if it were the offset,
+so the state machine was told to start executing from the wrong address in
+PIO instruction memory. This produced a malformed WS2812 bit waveform,
+which apparently only ever latched the first color successfully sent.
+
+### Fix applied
+
+```c
+uint offset;
+pio_claim_free_sm_and_add_program(&ws2812_program, &pio, &pio_sm, &offset);
+```
+
+Rebuilt, reflashed; the LED then changed color correctly between phases.
+
+## 2026-10-11 — C firmware: "green" power-on blink displays as red
+
+### Observed behavior
+
+After redesigning the LED behavior (off by default, blink green x2 on
+power-on, stay off otherwise — see README), the power-on blink visibly
+showed **red**, not green.
+
+### Root cause
+
+The RGB-to-wire-byte-order helper (then named `grb()`) assumed the more
+common WS2812 wire order (green byte first, then red, then blue), copied
+from the canonical `pico-examples` WS2812 driver. This board's onboard
+WS2812 apparently expects **RGB** order instead (red byte first) — sending
+"green" first-byte data to an RGB-expecting LED displays as red.
+
+### Fix applied
+
+Swapped the byte packing in `firmware-c/src/main.c` (renamed to
+`rgb_word()` for clarity) from `g<<24 | r<<16 | b<<8` to
+`r<<24 | g<<16 | b<<8`. Rebuilt, reflashed; the power-on blink then showed
+green correctly.
+
 ## 2026-10-11 — LED cycles correctly, but pointer doesn't visibly move
 
 ### Observed behavior

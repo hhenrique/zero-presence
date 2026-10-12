@@ -12,11 +12,16 @@
 
 #define NEOPIXEL_PIN 16
 #define NEOPIXEL_FREQ_HZ 800000.f
+#define NEOPIXEL_BRIGHTNESS 0.2f /* 0.0 (off) to 1.0 (full) */
 
 #define BUTTON_DEBOUNCE_MS 50
 #define JIGGLE_INTERVAL_MS 500
 #define JIGGLE_STEP_PX 10
 #define JIGGLE_SETTLE_MS 100
+
+#define POWER_ON_BLINK_COUNT 2
+#define POWER_ON_BLINK_ON_MS 150
+#define POWER_ON_BLINK_OFF_MS 150
 
 typedef struct {
     uint32_t move_ms;
@@ -32,12 +37,20 @@ static const phase_t PHASES[] = {
 static PIO pio;
 static uint pio_sm;
 
-static inline uint32_t grb(uint8_t r, uint8_t g, uint8_t b) {
-    return ((uint32_t)g << 24) | ((uint32_t)r << 16) | ((uint32_t)b << 8);
+/* This board's onboard WS2812 expects RGB byte order on the wire, not the
+ * more common GRB order (confirmed empirically: sending "green" first-byte
+ * displayed as red). */
+static inline uint32_t rgb_word(uint8_t r, uint8_t g, uint8_t b) {
+    return ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8);
+}
+
+static inline uint8_t scale_brightness(uint8_t channel) {
+    return (uint8_t)(channel * NEOPIXEL_BRIGHTNESS);
 }
 
 static void set_led(uint8_t r, uint8_t g, uint8_t b) {
-    pio_sm_put_blocking(pio, pio_sm, grb(r, g, b));
+    pio_sm_put_blocking(pio, pio_sm,
+                        rgb_word(scale_brightness(r), scale_brightness(g), scale_brightness(b)));
 }
 
 static bool button_edge_pressed(void) {
@@ -66,8 +79,7 @@ static void hid_jiggle(void) {
 
 /* Runs `duration_ms`, polling the button throughout. Returns false if the
  * button was pressed during this hold, meaning the caller should stop. */
-static bool hold(uint32_t duration_ms, uint8_t r, uint8_t g, uint8_t b, bool jiggle) {
-    set_led(r, g, b);
+static bool hold(uint32_t duration_ms, bool jiggle) {
     uint32_t start = board_millis();
     uint32_t last_jiggle = start;
 
@@ -89,10 +101,18 @@ static bool hold(uint32_t duration_ms, uint8_t r, uint8_t g, uint8_t b, bool jig
 }
 
 static void wait_off(void) {
-    set_led(255, 150, 0);
     while (!button_edge_pressed()) {
         tud_task();
         board_delay(1);
+    }
+}
+
+static void power_on_blink(void) {
+    for (int i = 0; i < POWER_ON_BLINK_COUNT; ++i) {
+        set_led(0, 255, 0);
+        board_delay(POWER_ON_BLINK_ON_MS);
+        set_led(0, 0, 0);
+        board_delay(POWER_ON_BLINK_OFF_MS);
     }
 }
 
@@ -100,7 +120,8 @@ int main(void) {
     board_init();
     tusb_init();
 
-    uint offset = pio_claim_free_sm_and_add_program(&ws2812_program, &pio, &pio_sm, NULL);
+    uint offset;
+    pio_claim_free_sm_and_add_program(&ws2812_program, &pio, &pio_sm, &offset);
     ws2812_program_init(pio, pio_sm, offset, NEOPIXEL_PIN, NEOPIXEL_FREQ_HZ);
 
     bool enabled = false;
@@ -112,14 +133,15 @@ int main(void) {
         if (!enabled) {
             wait_off();
             enabled = true;
+            power_on_blink();
             continue;
         }
 
         bool completed = true;
         for (size_t i = 0; i < NUM_PHASES && completed; ++i) {
-            completed = hold(PHASES[i].move_ms, 255, 0, 0, true);
+            completed = hold(PHASES[i].move_ms, true);
             if (completed) {
-                completed = hold(PHASES[i].wait_ms, 0, 255, 0, false);
+                completed = hold(PHASES[i].wait_ms, false);
             }
         }
 
